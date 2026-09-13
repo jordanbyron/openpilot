@@ -28,6 +28,10 @@ DESCRIPTIONS = {
     "without a turn signal activated while driving over 31 mph (50 km/h)."
   ),
   "AlwaysOnDM": tr_noop("Enable driver monitoring even when openpilot is not engaged."),
+  "SubaruImprezaTorque": tr_noop(
+    "Raise the maximum steering torque on the 2017-19 Impreza / 2018-19 Crosstrek by 50% (2047 to 3071) with rescaled lateral gains. " +
+    "This exceeds the stock limit; panda safety permits it only while this is on."
+  ),
   'RecordFront': tr_noop("Upload data from the driver facing camera and help improve the driver monitoring algorithm."),
   "IsMetric": tr_noop("Display speed in km/h instead of mph."),
   "RecordAudio": tr_noop("Record and store microphone audio while driving. The audio will be included in the dashcam video in comma connect."),
@@ -65,6 +69,12 @@ class TogglesLayout(Widget):
         DESCRIPTIONS["IsLdwEnabled"],
         "warning.png",
         False,
+      ),
+      "SubaruImprezaTorque": (
+        lambda: tr("Increased Steer Torque (Impreza/Crosstrek)"),
+        DESCRIPTIONS["SubaruImprezaTorque"],
+        "chffr_wheel.png",
+        True,
       ),
       "AlwaysOnDM": (
         lambda: tr("Always-On Driver Monitoring"),
@@ -194,6 +204,11 @@ class TogglesLayout(Widget):
       self._toggles["ExperimentalMode"].set_description(e2e_description)
 
     self._update_experimental_mode_icon()
+
+    is_impreza = ui_state.CP is not None and ui_state.CP.carFingerprint == "SUBARU_IMPREZA"
+    self._toggles["SubaruImprezaTorque"].set_visible(is_impreza)
+    if ui_state.CP is not None and not is_impreza:
+      self._params.remove("SubaruImprezaTorque")
 
     # TODO: make a param control list item so we don't need to manage internal state as much here
     # refresh toggles from params to mirror external changes
