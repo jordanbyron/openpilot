@@ -118,6 +118,11 @@ class Car:
       safety_config.safetyModel = structs.CarParams.SafetyModel.noOutput
       self.CP.safetyConfigs = [safety_config]
 
+    # after the passive block so the flag never lands on a CP whose safetyConfigs was replaced by noOutput,
+    # and before CarParams is written so panda and openpilot agree for the whole ignition cycle
+    if not self.CP.passive and self.CP.brand == "subaru" and self.params.get_bool("SubaruSNG"):
+      self.CI.enable_stop_and_go(self.CP)
+
     if self.CP.secOcRequired:
       # Copy user key if available
       try:
