@@ -5,6 +5,7 @@ from openpilot.system.ui.widgets.list_view import multiple_button_item, toggle_i
 from openpilot.system.ui.widgets.scroller_tici import Scroller
 from openpilot.system.ui.lib.multilang import tr, tr_noop
 from openpilot.selfdrive.ui.ui_state import ui_state
+from opendbc.car.subaru.values import SubaruFlags
 
 PERSONALITY_TO_INT = log.LongitudinalPersonality.schema.enumerants
 
@@ -28,6 +29,10 @@ DESCRIPTIONS = {
   "SubaruImprezaTorque": tr_noop(
     "Raise the maximum steering torque on the 2017-19 Impreza / 2018-19 Crosstrek by 50% (2047 to 3071) with rescaled lateral gains. " +
     "This exceeds the stock limit; panda safety permits it only while this is on."
+  ),
+  "SubaruSNG": tr_noop(
+    "Automatically resume from an EyeSight hold when the lead car pulls away, by mimicking a light throttle tap. " +
+    "Only for gen1 EyeSight cars using stock cruise control. Does nothing if you stopped with the brake pedal."
   ),
   'RecordFront': tr_noop("Upload data from the cabin camera and help improve the driver monitoring algorithm."),
   "IsMetric": tr_noop("Display speed in km/h instead of mph."),
@@ -70,6 +75,12 @@ class TogglesLayout(Widget):
       "SubaruImprezaTorque": (
         lambda: tr("Increased Steer Torque (Impreza/Crosstrek)"),
         DESCRIPTIONS["SubaruImprezaTorque"],
+        "chffr_wheel.png",
+        True,
+      ),
+      "SubaruSNG": (
+        lambda: tr("Subaru Stop and Go"),
+        DESCRIPTIONS["SubaruSNG"],
         "chffr_wheel.png",
         True,
       ),
@@ -200,6 +211,15 @@ class TogglesLayout(Widget):
     self._toggles["SubaruImprezaTorque"].set_visible(is_impreza)
     if ui_state.CP is not None and not is_impreza:
       self._params.remove("SubaruImprezaTorque")
+
+    # mirrors CarInterface.enable_stop_and_go exactly, so the toggle is never offered where it is a no-op
+    sng_available = ui_state.CP is not None and ui_state.CP.brand == "subaru" and \
+                    not ui_state.CP.openpilotLongitudinalControl and \
+                    not (ui_state.CP.flags & (SubaruFlags.GLOBAL_GEN2 | SubaruFlags.HYBRID |
+                                              SubaruFlags.PREGLOBAL | SubaruFlags.LKAS_ANGLE))
+    self._toggles["SubaruSNG"].set_visible(sng_available)
+    if ui_state.CP is not None and not sng_available:
+      self._params.remove("SubaruSNG")
 
     # TODO: make a param control list item so we don't need to manage internal state as much here
     # refresh toggles from params to mirror external changes
