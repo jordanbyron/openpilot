@@ -53,9 +53,13 @@ ECU samples (plus a 5-count spoof floor each), and `Speed` against panda's own w
 
 The two SNG TX entries carry `.check_relay = true`, so relay-malfunction detection comes for free.
 
-**The `Brake_Pedal` 50 Hz rate is inferred from `Brake_Status`, never measured** — no Subaru DBC
-carries cycle times. If the real rate is lower the car simply never engages; drop that RX check and
-the `tx_hook` brake bound together.
+**The `Brake_Pedal` 50 Hz rate.** No Subaru DBC carries cycle times, but openpilot's own CAN
+parser enforced `("Brake_Pedal", 50)` and `("Throttle", 100)` on every global Subaru through 0.9.7,
+which is the build this car ran for years. If the rate ever proves different the car simply never
+engages; drop that RX check and the `tx_hook` brake bound together.
+
+`Brake_Lights` in the mirrored `Brake_Pedal` is deliberately left unbounded in panda: it is a
+single lamp bit that cannot command motion, and over-reporting it is the fail-safe direction.
 
 Eligibility (`CarInterface.enable_stop_and_go`) excludes gen2, hybrid, preglobal, LKAS-angle, and
 any car with openpilot longitudinal.
@@ -77,6 +81,12 @@ engaged or after a brake press. Scoped to Subaru — the only mode it has been v
 main on AND valid RX checks AND no steering disengage. Every torque, rate, driver-override and
 steer-req limit is untouched, and longitudinal checks still key off `controls_allowed` alone — AOL
 never enables longitudinal.
+
+`safety_tick` also closes `aol_allowed` directly whenever the RX checks go invalid: the gate is
+otherwise only recomputed on RX, so total CAN loss would leave a stale "allowed" in place.
+
+The `!steering_disengage` term is carried for future modes; Subaru never sets `steering_disengage`,
+so on this car driver override is handled entirely by the unchanged driver-torque limits.
 
 `aol_rx_invalid` is a private latch, deliberately separate from `safety_rx_checks_invalid`: routing
 one bad-checksum frame into the shared flag would raise `controlsMismatch` (IMMEDIATE_DISABLE)
