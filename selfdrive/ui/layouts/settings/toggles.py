@@ -9,8 +9,16 @@ from openpilot.system.ui.lib.multilang import tr, tr_noop
 from openpilot.system.ui.widgets import DialogResult
 from openpilot.selfdrive.ui.ui_state import ui_state
 from opendbc.car.subaru.values import SubaruFlags
+from openpilot.common.constants import CV
 
 PERSONALITY_TO_INT = log.LongitudinalPersonality.schema.enumerants
+
+AOL_PAUSE_SPEEDS_MPH = [0, 5, 10, 15]
+
+
+def _nearest_pause_speed_index(stored_ms: float) -> int:
+  speeds = [s * CV.MPH_TO_MS for s in AOL_PAUSE_SPEEDS_MPH]
+  return min(range(len(speeds)), key=lambda i: abs(speeds[i] - stored_ms))
 
 # Description constants
 DESCRIPTIONS = {
@@ -29,6 +37,11 @@ DESCRIPTIONS = {
     "without a turn signal activated while driving over 31 mph (50 km/h)."
   ),
   "AlwaysOnDM": tr_noop("Enable driver monitoring even when openpilot is not engaged."),
+  "AlwaysOnLateral": tr_noop(
+    "Keep openpilot steering whenever the car's cruise control main switch is on, even when openpilot is not engaged " +
+    "or after a brake press. Steering still stops in reverse/park, while calibrating, and on any fault."
+  ),
+  "AlwaysOnLateralPauseSpeed": tr_noop("Pause Always-On Lateral while the brake is pressed below this speed. Off never pauses."),
   "SubaruImprezaTorque": tr_noop(
     "Raise the maximum steering torque on the 2017-19 Impreza / 2018-19 Crosstrek by 50% (2047 to 3071) with rescaled lateral gains. " +
     "This exceeds the stock limit; panda safety permits it only while this is on."
@@ -74,6 +87,12 @@ class TogglesLayout(Widget):
         DESCRIPTIONS["IsLdwEnabled"],
         "warning.png",
         False,
+      ),
+      "AlwaysOnLateral": (
+        lambda: tr("Always-On Lateral"),
+        DESCRIPTIONS["AlwaysOnLateral"],
+        "chffr_wheel.png",
+        True,
       ),
       "SubaruImprezaTorque": (
         lambda: tr("Increased Steer Torque (Impreza/Crosstrek)"),
@@ -123,6 +142,22 @@ class TogglesLayout(Widget):
       icon="speed_limit.png"
     )
 
+    is_metric = self._params.get_bool("IsMetric")
+    if is_metric:
+      pause_labels = [f"{round(mph * CV.MPH_TO_KPH)} km/h" for mph in AOL_PAUSE_SPEEDS_MPH[1:]]
+    else:
+      pause_labels = [f"{mph} mph" for mph in AOL_PAUSE_SPEEDS_MPH[1:]]
+
+    self._aol_pause_setting = multiple_button_item(
+      lambda: tr("Always-On Lateral Pause Speed"),
+      lambda: tr(DESCRIPTIONS["AlwaysOnLateralPauseSpeed"]),
+      buttons=[lambda: tr("Off"), *pause_labels],
+      button_width=255,
+      callback=self._set_aol_pause_speed,
+      selected_index=_nearest_pause_speed_index(self._params.get("AlwaysOnLateralPauseSpeed", return_default=True)),
+      icon="chffr_wheel.png"
+    )
+
     self._toggles = {}
     self._locked_toggles = set()
     for param, (title, desc, icon, needs_restart) in self._toggle_defs.items():
@@ -156,6 +191,9 @@ class TogglesLayout(Widget):
       if param == "DisengageOnAccelerator":
         self._toggles["LongitudinalPersonality"] = self._long_personality_setting
 
+      if param == "AlwaysOnLateral":
+        self._toggles["AlwaysOnLateralPauseSpeed"] = self._aol_pause_setting
+
     self._update_experimental_mode_icon()
     self._scroller = Scroller(list(self._toggles.values()), line_separator=True, spacing=0)
 
@@ -167,6 +205,11 @@ class TogglesLayout(Widget):
       if personality != ui_state.personality and ui_state.started:
         self._long_personality_setting.action_item.set_selected_button(personality)
       ui_state.personality = personality
+
+      # the needs_restart loop in _update_toggles only keys off ui_state.engaged, so AOL's lock is re-asserted here
+      if "AlwaysOnLateral" not in self._locked_toggles:
+        aol = ui_state.started and ui_state.sm["selfdriveState"].alwaysOnLateral
+        self._toggles["AlwaysOnLateral"].action_item.set_enabled(not (ui_state.engaged or aol))
 
   def show_event(self):
     super().show_event()
@@ -278,3 +321,6 @@ class TogglesLayout(Widget):
 
   def _set_longitudinal_personality(self, button_index: int):
     self._params.put("LongitudinalPersonality", button_index, block=True)
+
+  def _set_aol_pause_speed(self, button_index: int):
+    self._params.put("AlwaysOnLateralPauseSpeed", AOL_PAUSE_SPEEDS_MPH[button_index] * CV.MPH_TO_MS, block=True)

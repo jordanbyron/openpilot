@@ -88,12 +88,14 @@ class Controls:
     long_plan = self.sm['longitudinalPlan']
     model_v2 = self.sm['modelV2']
 
+    ss = self.sm['selfdriveState']
+
     CC = car.CarControl.new_message()
-    CC.enabled = self.sm['selfdriveState'].enabled
+    CC.enabled = ss.enabled
 
     # Check which actuators can be enabled
     standstill = abs(CS.vEgo) <= max(self.CP.minSteerSpeed, 0.3) or CS.standstill
-    CC.latActive = self.sm['selfdriveState'].active and not CS.steerFaultTemporary and not CS.steerFaultPermanent and \
+    CC.latActive = (ss.active or ss.alwaysOnLateral) and not CS.steerFaultTemporary and not CS.steerFaultPermanent and \
                    (not standstill or self.CP.steerAtStandstill)
     CC.longActive = CC.enabled and not any(e.overrideLongitudinal for e in self.sm['onroadEvents']) and self.CP.openpilotLongitudinalControl
 

@@ -90,3 +90,13 @@ class TestStateMachine:
         self.state_machine.update(self.events)
         assert self.state_machine.state == state
         self.events.clear()
+
+  def test_always_on_lateral_keeps_warning_alerts(self):
+    self.state_machine.state = State.disabled
+    assert self.state_machine.update(self.events, True) == (False, False)
+    assert self.state_machine.state == State.disabled
+    assert ET.WARNING in self.state_machine.current_alert_types
+
+    assert self.state_machine.update(self.events, False) == (False, False)
+    assert self.state_machine.state == State.disabled
+    assert ET.WARNING not in self.state_machine.current_alert_types

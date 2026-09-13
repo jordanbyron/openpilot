@@ -17,12 +17,13 @@ from openpilot.common.gps import get_gps_location_service
 from openpilot.selfdrive.car.car_specific import CarSpecificEvents
 from openpilot.selfdrive.locationd.helpers import PoseCalibrator, Pose
 from openpilot.selfdrive.selfdrived.events import Events, ET
-from openpilot.selfdrive.selfdrived.helpers import ExcessiveActuationCheck
+from openpilot.selfdrive.selfdrived.helpers import ExcessiveActuationCheck, AlwaysOnLateralGate
 from openpilot.selfdrive.selfdrived.state import StateMachine
 from openpilot.selfdrive.selfdrived.alertmanager import AlertManager, set_offroad_alert
 
 from openpilot.system.version import get_build_metadata
 from openpilot.system.hardware import HARDWARE
+from opendbc.safety import ALTERNATIVE_EXPERIENCE
 
 REPLAY = "REPLAY" in os.environ
 SIMULATION = "SIMULATION" in os.environ
@@ -95,6 +96,8 @@ class SelfdriveD:
     self.is_metric = self.params.get_bool("IsMetric")
     self.is_ldw_enabled = self.params.get_bool("IsLdwEnabled")
     self.disengage_on_accelerator = self.params.get_bool("DisengageOnAccelerator")
+    self.always_on_lateral_available = bool(self.CP.alternativeExperience & ALTERNATIVE_EXPERIENCE.ALWAYS_ON_LATERAL)
+    self.always_on_lateral_pause_speed = self.params.get("AlwaysOnLateralPauseSpeed", return_default=True)
 
     car_recognized = self.CP.brand != 'mock'
 
@@ -121,6 +124,8 @@ class SelfdriveD:
     self.not_running_prev = None
     self.experimental_mode = False
     self.personality = self.params.get("LongitudinalPersonality", return_default=True)
+    self.always_on_lateral = False
+    self.aol_gate = AlwaysOnLateralGate()
     self.recalibrating_seen = False
     self.dm_lockout_set = False
     self.dm_uncertain_alerted = False
@@ -499,6 +504,7 @@ class SelfdriveD:
     ss.engageable = not self.events.contains(ET.NO_ENTRY)
     ss.experimentalMode = self.experimental_mode
     ss.personality = self.personality
+    ss.alwaysOnLateral = self.always_on_lateral
 
     ss.alertText1 = self.AM.current_alert.alert_text_1
     ss.alertText2 = self.AM.current_alert.alert_text_2
@@ -521,8 +527,13 @@ class SelfdriveD:
   def step(self):
     CS = self.data_sample()
     self.update_events(CS)
+
+    self.always_on_lateral = self.always_on_lateral_available and self.initialized and not self.CP.passive and \
+                             self.aol_gate.update(CS, self.events, self.sm['liveCalibration'].calStatus,
+                                                  self.always_on_lateral_pause_speed)
+
     if not self.CP.passive and self.initialized:
-      self.enabled, self.active = self.state_machine.update(self.events)
+      self.enabled, self.active = self.state_machine.update(self.events, self.always_on_lateral)
     self.update_alerts(CS)
 
     self.publish_selfdriveState(CS)
@@ -536,6 +547,7 @@ class SelfdriveD:
       self.disengage_on_accelerator = self.params.get_bool("DisengageOnAccelerator")
       self.experimental_mode = self.params.get_bool("ExperimentalMode") and self.CP.openpilotLongitudinalControl
       self.personality = self.params.get("LongitudinalPersonality", return_default=True)
+      self.always_on_lateral_pause_speed = self.params.get("AlwaysOnLateralPauseSpeed", return_default=True)
       time.sleep(0.1)
 
   def run(self):
