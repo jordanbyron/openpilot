@@ -12,7 +12,7 @@ from openpilot.common.params import Params
 
 CARD_PY = pathlib.Path(BASEDIR) / "selfdrive" / "car" / "card.py"
 
-MIRRORED_CARD_INIT_GATE = "controller_available and self.params.get_bool('AlwaysOnLateral')"
+MIRRORED_CARD_INIT_GATE = "controller_available and self.CP.brand == 'subaru' and self.params.get_bool('AlwaysOnLateral')"
 
 
 @pytest.fixture
@@ -31,7 +31,7 @@ def fresh_cp():
 
 
 def apply_card_init_gate(params, CP, controller_available=True):
-  if controller_available and params.get_bool("AlwaysOnLateral"):
+  if controller_available and CP.brand == "subaru" and params.get_bool("AlwaysOnLateral"):
     CP.alternativeExperience |= ALTERNATIVE_EXPERIENCE.ALWAYS_ON_LATERAL
 
 
@@ -68,6 +68,15 @@ def test_card_init_gate_needs_a_controller(params):
   params.put_bool("AlwaysOnLateral", True, block=True)
   CP = fresh_cp()
   apply_card_init_gate(params, CP, controller_available=False)
+  assert CP.alternativeExperience & ALTERNATIVE_EXPERIENCE.ALWAYS_ON_LATERAL == 0
+
+
+def test_card_init_gate_is_subaru_only(params):
+  # panda refuses the bit outside Subaru (aol_supported), so openpilot must not set it there either
+  params.put_bool("AlwaysOnLateral", True, block=True)
+  CP = fresh_cp()
+  CP.brand = "honda"
+  apply_card_init_gate(params, CP)
   assert CP.alternativeExperience & ALTERNATIVE_EXPERIENCE.ALWAYS_ON_LATERAL == 0
 
 
