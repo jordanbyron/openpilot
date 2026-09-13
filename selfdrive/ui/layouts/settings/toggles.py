@@ -259,6 +259,13 @@ class TogglesLayout(Widget):
 
     self._update_experimental_mode_icon()
 
+    # panda only honors ALT_EXP_ALWAYS_ON_LATERAL on Subaru, so the toggle is a no-op anywhere else
+    aol_available = ui_state.CP is not None and ui_state.CP.brand == "subaru"
+    self._toggles["AlwaysOnLateral"].set_visible(aol_available)
+    self._toggles["AlwaysOnLateralPauseSpeed"].set_visible(aol_available)
+    if ui_state.CP is not None and not aol_available:
+      self._params.remove("AlwaysOnLateral")
+
     is_impreza = ui_state.CP is not None and ui_state.CP.carFingerprint == "SUBARU_IMPREZA"
     self._toggles["SubaruImprezaTorque"].set_visible(is_impreza)
     if ui_state.CP is not None and not is_impreza:
@@ -278,7 +285,10 @@ class TogglesLayout(Widget):
     for param in self._toggle_defs:
       self._toggles[param].action_item.set_state(self._params.get_bool(param))
 
-    # these toggles need restart, block while engaged
+    # these toggles need restart, block while engaged.
+    # Known, accepted race: this transiently re-enables AlwaysOnLateral while AOL is active but openpilot
+    # is not engaged. _update_state re-asserts that lock on the next selfdriveState tick, and the param is
+    # only re-read at Car.__init__, so a tap inside the window cannot change live steering.
     for toggle_def in self._toggle_defs:
       if self._toggle_defs[toggle_def][3] and toggle_def not in self._locked_toggles:
         self._toggles[toggle_def].action_item.set_enabled(not ui_state.engaged)

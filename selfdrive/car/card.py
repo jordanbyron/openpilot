@@ -115,7 +115,9 @@ class Car:
     controller_available = self.CI.CC is not None and openpilot_enabled_toggle and not self.CP.dashcamOnly
     self.CP.passive = not controller_available or self.CP.dashcamOnly
 
-    if controller_available and self.params.get_bool("AlwaysOnLateral"):
+    # panda only honors this bit on Subaru (opendbc/safety/modes/subaru.h sets aol_supported); keep the
+    # openpilot side scoped to match, so no other brand ever runs with a mismatched alternativeExperience
+    if controller_available and self.CP.brand == "subaru" and self.params.get_bool("AlwaysOnLateral"):
       self.CP.alternativeExperience |= ALTERNATIVE_EXPERIENCE.ALWAYS_ON_LATERAL
 
     if self.CP.passive:
