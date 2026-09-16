@@ -106,10 +106,17 @@ Policy notes:
   it returns on the next clean frame, as in FrogPilot; there is no cooldown.
 - **A gas-pedal press (`ET.USER_DISABLE`) does not stop AOL**, and the default pause speed is `0.0`,
   meaning a brake press never pauses steering. Pause options are 0/5/10/15 mph.
-- The one deliberate deviation from FrogPilot's devnew: the panda-side bad-frame latch is a private
-  `aol_rx_invalid` rather than FrogPilot's mutation of the shared `safety_rx_checks_invalid`, which
-  would raise `controlsMismatch` on a single bad checksum frame during normal engaged driving. The
-  AOL gate itself behaves identically under both.
+- The panda-side bad-frame latch is FrogPilot devnew's line verbatim: one bad whitelisted frame sets
+  the shared `safety_rx_checks_invalid` until the next `safety_tick`. That flag reaches
+  `pandaState.safetyRxChecksInvalid`, which is what lets openpilot drop AOL and re-ramp torque from
+  zero in step with the panda's own `desired_torque_last` reset. An earlier revision used a private
+  latch here; review showed it left LKAS silently blocked after a bad frame during AOL-only steering,
+  and that the engaged-mode `controlsMismatch` it was meant to avoid happens on stock anyway (the
+  safety core clears `controls_allowed` on any invalid frame), just two seconds later.
+- The dash LKAS indicator and lane-line enables in `ES_LKAS_State` key on `latActive` rather than
+  `enabled`, as in FrogPilot stable, so the cluster shows LKAS while AOL steers.
+- The SNG throttle mirror carries every stock bit: the 0.11.1 DBC had no signal for bits 29-30 of
+  `Throttle`, so a `Signal2` was added to the generator source to mirror them as FrogPilot's DBC does.
 
 The stricter gating this fork originally had (SOFT_DISABLE cut, 1 s steer-fault cooldown, full
 calibration required) is in the `crosstrek-fp` branch history.
