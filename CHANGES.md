@@ -74,7 +74,7 @@ engaged or after a brake press. Scoped to Subaru — the only mode it has been v
 | Params | `AlwaysOnLateral` `{PERSISTENT, BOOL}`, `AlwaysOnLateralPauseSpeed` `{PERSISTENT, FLOAT, "0.0"}` (m/s) |
 | Alt experience | `ALT_EXP_ALWAYS_ON_LATERAL` / `ALTERNATIVE_EXPERIENCE.ALWAYS_ON_LATERAL` = `32` |
 | cereal | `SelfdriveState.alwaysOnLateral @13 :Bool` |
-| C | `aol_allowed`, `aol_rx_invalid`, `aol_supported`; accessor `get_aol_allowed` |
+| C | `aol_allowed`, `aol_supported`; accessor `get_aol_allowed` |
 
 **Panda.** The may-steer gate in `lateral.h` becomes `(aol_allowed || controls_allowed)`.
 `aol_allowed` requires `aol_supported` (set only by `subaru_init`) AND alt-experience bit 32 AND ACC
@@ -88,9 +88,8 @@ otherwise only recomputed on RX, so total CAN loss would leave a stale "allowed"
 The `!steering_disengage` term is carried for future modes; Subaru never sets `steering_disengage`,
 so on this car driver override is handled entirely by the unchanged driver-torque limits.
 
-`aol_rx_invalid` is a private latch, deliberately separate from `safety_rx_checks_invalid`: routing
-one bad-checksum frame into the shared flag would raise `controlsMismatch` (IMMEDIATE_DISABLE)
-during ordinary engaged driving.
+One bad whitelisted frame sets the shared `safety_rx_checks_invalid` until the next `safety_tick`
+(FrogPilot devnew's line verbatim); see the policy notes below for why this is the shared flag.
 
 **openpilot.** `selfdrived` is the sole authority for "AOL active" and publishes
 `SelfdriveState.alwaysOnLateral`; controlsd, driver monitoring and the UI consume it. No new
