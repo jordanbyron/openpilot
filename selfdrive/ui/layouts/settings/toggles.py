@@ -8,17 +8,11 @@ from openpilot.system.ui.lib.application import gui_app
 from openpilot.system.ui.lib.multilang import tr, tr_noop
 from openpilot.system.ui.widgets import DialogResult
 from openpilot.selfdrive.ui.ui_state import ui_state
-from opendbc.car.subaru.values import SubaruFlags
+from openpilot.selfdrive.ui.layouts.settings.subaru import AOL_PAUSE_SPEEDS_MPH, nearest_pause_speed_index, \
+                                                           pause_speed_ms, aol_available, impreza_torque_available, sng_available
 from openpilot.common.constants import CV
 
 PERSONALITY_TO_INT = log.LongitudinalPersonality.schema.enumerants
-
-AOL_PAUSE_SPEEDS_MPH = [0, 5, 10, 15]
-
-
-def _nearest_pause_speed_index(stored_ms: float) -> int:
-  speeds = [s * CV.MPH_TO_MS for s in AOL_PAUSE_SPEEDS_MPH]
-  return min(range(len(speeds)), key=lambda i: abs(speeds[i] - stored_ms))
 
 # Description constants
 DESCRIPTIONS = {
@@ -154,7 +148,7 @@ class TogglesLayout(Widget):
       buttons=[lambda: tr("Off"), *pause_labels],
       button_width=255,
       callback=self._set_aol_pause_speed,
-      selected_index=_nearest_pause_speed_index(self._params.get("AlwaysOnLateralPauseSpeed", return_default=True)),
+      selected_index=nearest_pause_speed_index(self._params.get("AlwaysOnLateralPauseSpeed", return_default=True)),
       icon="chffr_wheel.png"
     )
 
@@ -259,25 +253,20 @@ class TogglesLayout(Widget):
 
     self._update_experimental_mode_icon()
 
-    # panda only honors ALT_EXP_ALWAYS_ON_LATERAL on Subaru, so the toggle is a no-op anywhere else
-    aol_available = ui_state.CP is not None and ui_state.CP.brand == "subaru"
-    self._toggles["AlwaysOnLateral"].set_visible(aol_available)
-    self._toggles["AlwaysOnLateralPauseSpeed"].set_visible(aol_available)
-    if ui_state.CP is not None and not aol_available:
+    aol = aol_available(ui_state.CP)
+    self._toggles["AlwaysOnLateral"].set_visible(aol)
+    self._toggles["AlwaysOnLateralPauseSpeed"].set_visible(aol)
+    if ui_state.CP is not None and not aol:
       self._params.remove("AlwaysOnLateral")
 
-    is_impreza = ui_state.CP is not None and ui_state.CP.carFingerprint == "SUBARU_IMPREZA"
-    self._toggles["SubaruImprezaTorque"].set_visible(is_impreza)
-    if ui_state.CP is not None and not is_impreza:
+    impreza_torque = impreza_torque_available(ui_state.CP)
+    self._toggles["SubaruImprezaTorque"].set_visible(impreza_torque)
+    if ui_state.CP is not None and not impreza_torque:
       self._params.remove("SubaruImprezaTorque")
 
-    # mirrors CarInterface.enable_stop_and_go exactly, so the toggle is never offered where it is a no-op
-    sng_available = ui_state.CP is not None and ui_state.CP.brand == "subaru" and \
-                    not ui_state.CP.openpilotLongitudinalControl and \
-                    not (ui_state.CP.flags & (SubaruFlags.GLOBAL_GEN2 | SubaruFlags.HYBRID |
-                                              SubaruFlags.PREGLOBAL | SubaruFlags.LKAS_ANGLE))
-    self._toggles["SubaruSNG"].set_visible(sng_available)
-    if ui_state.CP is not None and not sng_available:
+    sng = sng_available(ui_state.CP)
+    self._toggles["SubaruSNG"].set_visible(sng)
+    if ui_state.CP is not None and not sng:
       self._params.remove("SubaruSNG")
 
     # TODO: make a param control list item so we don't need to manage internal state as much here
@@ -333,4 +322,4 @@ class TogglesLayout(Widget):
     self._params.put("LongitudinalPersonality", button_index, block=True)
 
   def _set_aol_pause_speed(self, button_index: int):
-    self._params.put("AlwaysOnLateralPauseSpeed", AOL_PAUSE_SPEEDS_MPH[button_index] * CV.MPH_TO_MS, block=True)
+    self._params.put("AlwaysOnLateralPauseSpeed", pause_speed_ms(button_index), block=True)

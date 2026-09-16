@@ -33,6 +33,12 @@ class BookmarkState(IntEnum):
 WIDE_CAM_MAX_SPEED = 5.0  # m/s (10 mph)
 ROAD_CAM_MIN_SPEED = 10  # m/s (25 mph)
 
+# no new UIStatus member: the != UIStatus.DISENGAGED checks elsewhere in the UI would misrender
+AOL_BORDER_COLOR = rl.Color(0x0A, 0xBA, 0xB5, 0xFF)
+AOL_BORDER_SIZE = 10
+BORDER_SIZE = 50
+BORDER_ROUNDNESS = 0.2 * 1.02
+
 CAM_Y_OFFSET = 20
 
 
@@ -232,7 +238,10 @@ class AugmentedRoadView(CameraView):
     self._hud_renderer.render(self._content_rect)
 
     # Draw fake rounded border
-    rl.draw_rectangle_rounded_lines_ex(self._content_rect, 0.2 * 1.02, 10, 50, rl.BLACK)
+    rl.draw_rectangle_rounded_lines_ex(self._content_rect, BORDER_ROUNDNESS, 10, BORDER_SIZE, rl.BLACK)
+
+    if ui_state.status == UIStatus.DISENGAGED and ui_state.sm["selfdriveState"].alwaysOnLateral:
+      self._draw_aol_border()
 
     # End clipping region
     rl.end_scissor_mode()
@@ -242,6 +251,12 @@ class AugmentedRoadView(CameraView):
     self._confidence_ball.render(self.rect)
 
     self._bookmark_icon.render(self.rect)
+
+  def _draw_aol_border(self):
+    inset = (BORDER_SIZE + AOL_BORDER_SIZE) / 2
+    border_rect = rl.Rectangle(self._content_rect.x + inset, self._content_rect.y + inset,
+                               self._content_rect.width - 2 * inset, self._content_rect.height - 2 * inset)
+    rl.draw_rectangle_rounded_lines_ex(border_rect, BORDER_ROUNDNESS, 10, AOL_BORDER_SIZE, AOL_BORDER_COLOR)
 
   def _switch_stream_if_needed(self, sm):
     if sm['selfdriveState'].experimentalMode and WIDE_CAM in self.available_streams:
