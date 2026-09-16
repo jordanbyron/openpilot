@@ -6,6 +6,11 @@ traffic. Each is a user toggle in *Settings → Toggles*, read once per ignition
 `selfdrive/car/card.py` before `CarParams` is written, so panda and openpilot never disagree
 mid-drive.
 
+All three toggles, the Always-On Lateral pause-speed selector and the teal AOL border are present in
+both UI trees: the comma 3/3X UI (`selfdrive/ui/`) and the comma 4 UI (`selfdrive/ui/mici/`). Both
+share one set of visibility predicates and unit conversions in
+`selfdrive/ui/layouts/settings/subaru.py` so they cannot drift apart.
+
 Changes span two repos: `opendbc_repo` (car interface + panda safety) and this one. Panda firmware
 picks up the safety headers from `opendbc_repo` automatically; `panda/` itself is untouched.
 
@@ -93,7 +98,7 @@ One bad whitelisted frame sets the shared `safety_rx_checks_invalid` until the n
 
 **openpilot.** `selfdrived` is the sole authority for "AOL active" and publishes
 `SelfdriveState.alwaysOnLateral`; controlsd, driver monitoring and the UI consume it. No new
-sockets. The UI draws a teal border while AOL steers and disengaged.
+sockets. Both UIs draw a teal border while AOL steers and openpilot is disengaged.
 
 `AlwaysOnLateralGate` (`selfdrive/selfdrived/helpers.py`) mirrors FrogPilot's
 `frogpilot_card` gating exactly: cuts AOL on CAN invalid, cruise unavailable,
