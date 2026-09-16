@@ -7,16 +7,14 @@ from openpilot.selfdrive.locationd.helpers import Pose
 from opendbc.car import ACCELERATION_DUE_TO_GRAVITY
 from opendbc.car.lateral import ISO_LATERAL_ACCEL
 from opendbc.car.interfaces import ACCEL_MIN, ACCEL_MAX
-from openpilot.selfdrive.selfdrived.events import Events, ET
+from openpilot.selfdrive.selfdrived.events import Events, ET, EVENTS
 
 MIN_EXCESSIVE_ACTUATION_COUNT = int(0.25 / DT_CTRL)
 MIN_LATERAL_ENGAGE_BUFFER = int(1 / DT_CTRL)
 
 GearShifter = car.CarState.GearShifter
 NON_DRIVING_GEARS = (GearShifter.unknown, GearShifter.park, GearShifter.neutral, GearShifter.reverse)
-
-# a marginal EyeSight Steer_Warning toggles fast enough that re-asserting on the next clean frame chatters
-AOL_STEER_FAULT_COOLDOWN = int(1.0 / DT_CTRL)
+EventName = log.OnroadEvent.EventName
 
 
 class ExcessiveActuationType(StrEnum):
@@ -62,34 +60,25 @@ class ExcessiveActuationCheck:
 
 
 class AlwaysOnLateralGate:
-  def __init__(self):
-    self._fault_free_frames = 0
+  """Always On Lateral arming, mirroring FrogPilot's frogpilot_card gating: cruise main on, a driving gear,
+  any calibration progress, no immediate-disable event (speedTooLow excepted), and not braking below the
+  pause speed unless stopped. Steer faults are handled downstream in controlsd's latActive, as in FrogPilot."""
 
   @staticmethod
-  def _conditions_ok(CS: car.CarState, events: Events, cal_status, pause_speed: float) -> bool:
+  def update(CS: car.CarState, events: Events, cal_perc: int, pause_speed: float) -> bool:
     if not (CS.canValid and CS.cruiseState.available):
       return False
 
     if CS.gearShifter in NON_DRIVING_GEARS:
       return False
 
-    if cal_status != log.LiveCalibrationData.Status.calibrated:
+    if cal_perc < 1:
       return False
 
-    # AOL steers from State.disabled, where no soft-disable timer exists to grace a fault through
-    if events.contains(ET.IMMEDIATE_DISABLE) or events.contains(ET.SOFT_DISABLE):
+    if any(ET.IMMEDIATE_DISABLE in EVENTS.get(e, {}) and e != EventName.speedTooLow for e in events.names):
       return False
 
-    if CS.brakePressed and not CS.standstill and CS.vEgo < pause_speed:
+    if CS.brakePressed and CS.vEgo < pause_speed and not CS.standstill:
       return False
 
     return True
-
-  def update(self, CS: car.CarState, events: Events, cal_status, pause_speed: float) -> bool:
-    if CS.steerFaultTemporary or CS.steerFaultPermanent:
-      self._fault_free_frames = 0
-    else:
-      self._fault_free_frames = min(self._fault_free_frames + 1, AOL_STEER_FAULT_COOLDOWN)
-
-    return self._conditions_ok(CS, events, cal_status, pause_speed) and \
-           self._fault_free_frames >= AOL_STEER_FAULT_COOLDOWN

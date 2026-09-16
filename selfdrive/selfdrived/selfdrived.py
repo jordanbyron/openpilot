@@ -529,7 +529,7 @@ class SelfdriveD:
     self.update_events(CS)
 
     self.always_on_lateral = self.always_on_lateral_available and self.initialized and not self.CP.passive and \
-                             self.aol_gate.update(CS, self.events, self.sm['liveCalibration'].calStatus,
+                             self.aol_gate.update(CS, self.events, self.sm['liveCalibration'].calPerc,
                                                   self.always_on_lateral_pause_speed)
 
     if not self.CP.passive and self.initialized:
