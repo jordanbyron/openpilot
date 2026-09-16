@@ -46,20 +46,20 @@ drive, so the mirror must transmit continuously — it cannot be gated on `contr
 | `SubaruFlags.SNG` | `256` |
 | C | `SUBARU_PARAM_SNG = 16` (inside `ALLOW_DEBUG`), `subaru_sng` |
 
-Instead of a `controls_allowed` gate, `subaru_tx_hook` bounds every motion-relevant field against
-what the car itself reported: `Throttle_Pedal` and `Brake_Pedal` against a rolling max of the real
-ECU samples (plus a 5-count spoof floor each), and `Speed` against panda's own wheel-speed-derived
-`vehicle_speed` plus 1 m/s. A new `Brake_Pedal` RX check gives panda an independent source.
+**FrogPilot parity (branch `crosstrek-fp-parity`).** The panda side matches FrogPilot's
+`safety_subaru.h`: the two mirrors are on the SNG TX allowlist, `subaru_tx_hook` rejects them only
+when SNG is off, and a `subaru_fwd_hook` blocks the stock 0x40/0x139 main->cam while SNG is on. No
+field bounds, no `Brake_Pedal` RX check, and the mirror entries are not relay-checked, exactly as in
+FrogPilot. The car side matches FrogPilot's `carcontroller.stop_and_go` and `subarucan` builders:
+`Throttle_Pedal = 5` and `Brake_Pedal = 5` replace the reported values outright, `Speed = 3` km/h
+(FrogPilot's value; an earlier revision of this fork sent 3 raw counts, 0.17 km/h, by mistake),
+the throttle mirror re-bases its counter off the last stock frame, and the resume pulse uses
+FrogPilot's `sng_acc_resume` state machine including its rest-at-minus-one quirk. The pulse is not
+masked on a driver gas press.
 
-The two SNG TX entries carry `.check_relay = true`, so relay-malfunction detection comes for free.
-
-**The `Brake_Pedal` 50 Hz rate.** No Subaru DBC carries cycle times, but openpilot's own CAN
-parser enforced `("Brake_Pedal", 50)` and `("Throttle", 100)` on every global Subaru through 0.9.7,
-which is the build this car ran for years. If the rate ever proves different the car simply never
-engages; drop that RX check and the `tx_hook` brake bound together.
-
-`Brake_Lights` in the mirrored `Brake_Pedal` is deliberately left unbounded in panda: it is a
-single lamp bit that cannot command motion, and over-reporting it is the fail-safe direction.
+The stricter panda bounding that this fork originally added (rolling-max limits on the mirrored
+fields plus a 50 Hz `Brake_Pedal` RX check) lives in the `crosstrek-fp` branch history if it is
+ever wanted back. It was dropped so the road-tested FrogPilot behavior is what gets driven first.
 
 Eligibility (`CarInterface.enable_stop_and_go`) excludes gen2, hybrid, preglobal, LKAS-angle, and
 any car with openpilot longitudinal.
@@ -96,20 +96,23 @@ during ordinary engaged driving.
 `SelfdriveState.alwaysOnLateral`; controlsd, driver monitoring and the UI consume it. No new
 sockets. The UI draws a teal border while AOL steers and disengaged.
 
-`AlwaysOnLateralGate` (`selfdrive/selfdrived/helpers.py`) cuts AOL on: CAN invalid, cruise
-unavailable, park/reverse/neutral/unknown gear, not calibrated, any `ET.IMMEDIATE_DISABLE` **or**
-`ET.SOFT_DISABLE` event, and brake pressed below `AlwaysOnLateralPauseSpeed` while moving.
+`AlwaysOnLateralGate` (`selfdrive/selfdrived/helpers.py`) mirrors FrogPilot's
+`frogpilot_card` gating exactly: cuts AOL on CAN invalid, cruise unavailable,
+park/reverse/neutral/unknown gear, `liveCalibration.calPerc < 1`, any `ET.IMMEDIATE_DISABLE` event
+other than `speedTooLow`, and brake pressed below `AlwaysOnLateralPauseSpeed` while moving.
 
-Two policy decisions worth knowing:
-- **SOFT_DISABLE cuts AOL.** While AOL steers the state machine sits in `State.disabled`, where
-  SOFT_DISABLE-only faults (`cameraMalfunction`, `modeldLagging`, `excessiveActuation`,
-  `steerTempUnavailable`, …) would otherwise be inert. There is no engaged soft-disable timer to
-  grace a fault through.
+Policy notes:
+- **SOFT_DISABLE does not cut AOL**, as in FrogPilot. Steer faults drop `latActive` in controlsd and
+  it returns on the next clean frame, as in FrogPilot; there is no cooldown.
 - **A gas-pedal press (`ET.USER_DISABLE`) does not stop AOL**, and the default pause speed is `0.0`,
   meaning a brake press never pauses steering. Pause options are 0/5/10/15 mph.
+- The one deliberate deviation from FrogPilot's devnew: the panda-side bad-frame latch is a private
+  `aol_rx_invalid` rather than FrogPilot's mutation of the shared `safety_rx_checks_invalid`, which
+  would raise `controlsMismatch` on a single bad checksum frame during normal engaged driving. The
+  AOL gate itself behaves identically under both.
 
-A 1 s fault-free cooldown (`AOL_STEER_FAULT_COOLDOWN`) keeps a marginal EyeSight `Steer_Warning`
-from chattering, since controlsd would otherwise re-assert on the very next clean frame.
+The stricter gating this fork originally had (SOFT_DISABLE cut, 1 s steer-fault cooldown, full
+calibration required) is in the `crosstrek-fp` branch history.
 
 ---
 
@@ -163,9 +166,8 @@ on and not engaged ⇒ teal border, `carControl.latActive` true, ES_LKAS torque 
 keeps steering (pause speed honored, standstill exempt); park/reverse/main-off/uncalibrated ⇒ no
 steering; toggle off ⇒ bit clear and stock behavior. **Before wide use**, run a controlled session
 (bench or empty road) watching `Steer_Warning` / `Steer_Error_1` with ACC main on and cruise
-inactive across speeds and steering inputs, confirming the 1 s cooldown suppresses re-assert
-chatter. Also verify that killing modeld onroad while AOL steers drops `alwaysOnLateral` within one
-frame.
+inactive across speeds and steering inputs, checking whether a marginal EPS fault chatters (FrogPilot
+has no cooldown; if chatter shows up on this car, that is the one place a deviation is justified).
 
 ---
 
@@ -215,7 +217,6 @@ toggles off ⇒ stock, all three on ⇒ `safetyParam == 24` / `alternativeExperi
 `SubaruFlags` bits are disjoint.
 
 On the safety side `TestSubaruGen1ImprezaTorqueSngSafety` is the only class matching the real device
-config (AOL via alt-experience + torque + SNG). It pins the two cross-feature behaviors: the Impreza
-3071 cap still applies under `aol_allowed` with `controls_allowed` false, and a missing `Brake_Pedal`
-(0x139) now disables AOL as well as SNG, since `aol_allowed` keys off `safety_rx_checks_invalid` and
-SNG added 0x139 to the RX checks.
+config (AOL via alt-experience + torque + SNG). It pins the cross-feature behaviors: the Impreza
+3071 cap still applies under `aol_allowed` with `controls_allowed` false, and AOL is independent of
+whether `Brake_Pedal` (0x139) was ever received, since SNG adds no RX check.
