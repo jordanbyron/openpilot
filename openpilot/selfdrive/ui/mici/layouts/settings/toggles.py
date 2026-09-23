@@ -37,7 +37,7 @@ class TogglesLayoutMici(NavScroller):
                                                      description="Keep steering whenever cruise main is on, even when openpilot\n" +
                                                                  "is not engaged. Stops in reverse/park and on any fault.")
     self._aol_pause_labels = self._pause_speed_labels()
-    self._aol_pause_toggle = BigMultiToggle("always-on lateral pause speed", self._aol_pause_labels,
+    self._aol_pause_toggle = BigMultiToggle("aol brake pause", self._aol_pause_labels,
                                             select_callback=self._set_aol_pause_speed,
                                             description="Pause always-on lateral while braking below this speed.")
     self._impreza_torque_toggle = BigParamControl("increased steer torque", "SubaruImprezaTorque", toggle_callback=restart_needed_callback,
