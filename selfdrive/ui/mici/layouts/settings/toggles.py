@@ -23,7 +23,7 @@ class TogglesLayoutMici(NavScroller):
     always_on_dm_toggle = BigParamControl("always-on driver monitor", "AlwaysOnDM")
     self._always_on_lateral_toggle = BigParamControl("always-on lateral", "AlwaysOnLateral", toggle_callback=restart_needed_callback)
     self._aol_pause_labels = self._pause_speed_labels()
-    self._aol_pause_toggle = BigMultiToggle("always-on lateral pause speed", self._aol_pause_labels,
+    self._aol_pause_toggle = BigMultiToggle("aol brake pause", self._aol_pause_labels,
                                             select_callback=self._set_aol_pause_speed)
     self._impreza_torque_toggle = BigParamControl("increased steer torque", "SubaruImprezaTorque", toggle_callback=restart_needed_callback)
     self._subaru_sng_toggle = BigParamControl("subaru stop and go", "SubaruSNG", toggle_callback=restart_needed_callback)
