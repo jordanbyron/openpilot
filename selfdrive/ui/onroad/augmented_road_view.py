@@ -25,7 +25,7 @@ BORDER_COLORS = {
   UIStatus.ENGAGED: rl.Color(0x16, 0x7F, 0x40, 0xFF),  # Green for engaged state
 }
 
-# no new UIStatus member: the != UIStatus.DISENGAGED checks elsewhere in the UI would misrender
+# AOL-only steering renders as UIStatus.ENGAGED (see ui_state); only the border tells it apart
 AOL_BORDER_COLOR = rl.Color(0x0A, 0xBA, 0xB5, 0xFF)
 
 WIDE_CAM_MAX_SPEED = 10.0  # m/s (22 mph)
@@ -108,7 +108,7 @@ class AugmentedRoadView(CameraView):
     rl.draw_rectangle_lines_ex(rect, UI_BORDER_SIZE, rl.BLACK)
     border_roundness = 0.12
     border_color = BORDER_COLORS.get(ui_state.status, BORDER_COLORS[UIStatus.DISENGAGED])
-    if ui_state.status == UIStatus.DISENGAGED and ui_state.sm["selfdriveState"].alwaysOnLateral:
+    if ui_state.always_on_lateral_only:
       border_color = AOL_BORDER_COLOR
     border_rect = rl.Rectangle(rect.x + UI_BORDER_SIZE, rect.y + UI_BORDER_SIZE,
                                rect.width - 2 * UI_BORDER_SIZE, rect.height - 2 * UI_BORDER_SIZE)

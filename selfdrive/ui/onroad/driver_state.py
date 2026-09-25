@@ -97,7 +97,7 @@ class DriverStateRenderer(Widget):
     rl.draw_spline_linear(self.face_lines, len(self.face_lines), 5.2, self.white_color)
 
     # Set arc color based on engaged state
-    self.arc_color = self.engaged_color if ui_state.engaged else self.disengaged_color
+    self.arc_color = self.engaged_color if ui_state.engaged or ui_state.always_on_lateral_only else self.disengaged_color
     self.arc_color.a = int(0.4 * 255 * (1.0 - self.dm_fade_state))  # Fade out when inactive
 
     # Draw arcs

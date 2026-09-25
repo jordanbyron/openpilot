@@ -65,6 +65,7 @@ class UIState:
 
     # UI Status tracking
     self.status: UIStatus = UIStatus.DISENGAGED
+    self.always_on_lateral_only: bool = False
     self.started_frame: int = 0
     self.started_time: float = 0.0
     self._engaged_prev: bool = False
@@ -165,10 +166,14 @@ class UIState:
       ss = self.sm["selfdriveState"]
       state = ss.state
 
+      # AOL steering with openpilot disengaged renders as ENGAGED so the lateral overlays (path, lane lines,
+      # wheel, torque bar) draw exactly as when engaged; ui_state.engaged still follows ss.enabled
+      self.always_on_lateral_only = ss.alwaysOnLateral and not ss.enabled
+
       if state in (log.SelfdriveState.OpenpilotState.preEnabled, log.SelfdriveState.OpenpilotState.overriding):
         self.status = UIStatus.OVERRIDE
       else:
-        self.status = UIStatus.ENGAGED if ss.enabled else UIStatus.DISENGAGED
+        self.status = UIStatus.ENGAGED if ss.enabled or self.always_on_lateral_only else UIStatus.DISENGAGED
 
     # Check for engagement state changes
     if self.engaged != self._engaged_prev:
@@ -180,6 +185,7 @@ class UIState:
     if self.started != self._started_prev or self.sm.frame == 1:
       if self.started:
         self.status = UIStatus.DISENGAGED
+        self.always_on_lateral_only = False
         self.started_frame = self.sm.frame
         self.started_time = time.monotonic()
 
