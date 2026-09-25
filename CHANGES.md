@@ -6,7 +6,7 @@ traffic. Each is a user toggle in *Settings → Toggles*, read once per ignition
 `selfdrive/car/card.py` before `CarParams` is written, so panda and openpilot never disagree
 mid-drive.
 
-All three toggles, the Always-On Lateral pause-speed selector and the teal AOL border are present in
+All three toggles, the Always-On Lateral pause-speed selector and the AOL onroad view are present in
 both UI trees: the comma 3/3X UI (`selfdrive/ui/`) and the comma 4 UI (`selfdrive/ui/mici/`). Both
 share one set of visibility predicates and unit conversions in
 `selfdrive/ui/layouts/settings/subaru.py` so they cannot drift apart.
@@ -98,7 +98,11 @@ One bad whitelisted frame sets the shared `safety_rx_checks_invalid` until the n
 
 **openpilot.** `selfdrived` is the sole authority for "AOL active" and publishes
 `SelfdriveState.alwaysOnLateral`; controlsd, driver monitoring and the UI consume it. No new
-sockets. Both UIs draw a teal border while AOL steers and openpilot is disengaged.
+sockets. While AOL steers and openpilot is disengaged, `ui_state` sets `always_on_lateral_only` and
+reports `UIStatus.ENGAGED`, so both UIs draw the full engaged lateral view (path, lane lines, wheel,
+torque bar, camera saturation, driver-monitoring icon). `ui_state.engaged` still follows `ss.enabled`,
+so settings locks and engage callbacks are unaffected. The comma 3/3X swaps its green border for teal
+to tell the modes apart; the comma 4 has no status border, so it looks exactly as when engaged.
 
 `AlwaysOnLateralGate` (`selfdrive/selfdrived/helpers.py`) mirrors FrogPilot's
 `frogpilot_card` gating exactly: cuts AOL on CAN invalid, cruise unavailable,
@@ -173,7 +177,7 @@ counts. Only then the parking-lot test: stop behind a cooperative lead, the car 
 when the lead moves; after a driver-braked stop with no lead it must not.
 
 **3. AOL.** Confirm pandad reflashed and `pandaStates[0].alternativeExperience == 32`. Cruise main
-on and not engaged ⇒ teal border, `carControl.latActive` true, ES_LKAS torque non-zero. Brake press
+on and not engaged ⇒ engaged-style onroad view (teal border on a 3X), `carControl.latActive` true, ES_LKAS torque non-zero. Brake press
 keeps steering (pause speed honored, standstill exempt); park/reverse/main-off/uncalibrated ⇒ no
 steering; toggle off ⇒ bit clear and stock behavior. **Before wide use**, run a controlled session
 (bench or empty road) watching `Steer_Warning` / `Steer_Error_1` with ACC main on and cruise
