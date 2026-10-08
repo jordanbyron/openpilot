@@ -1,6 +1,6 @@
-import pytest
-
 from openpilot.cereal import log
+from openpilot.common.parameterized import parameterized
+from openpilot.common.test import OpenpilotTestCase
 from opendbc.car.structs import car
 from openpilot.selfdrive.selfdrived.events import Events
 from openpilot.selfdrive.selfdrived.helpers import AlwaysOnLateralGate
@@ -31,7 +31,7 @@ def make_CS(**kwargs):
   return CS
 
 
-class TestAlwaysOnLateralGate:
+class TestAlwaysOnLateralGate(OpenpilotTestCase):
   def setup_method(self):
     self.gate = AlwaysOnLateralGate()
     self.events = Events()
@@ -47,23 +47,23 @@ class TestAlwaysOnLateralGate:
     # FrogPilot has no warm-up: the first healthy frame arms it
     assert self._update()
 
-  @pytest.mark.parametrize("kwargs", [
-    {"canValid": False},
-    {"cruiseState.available": False},
+  @parameterized.expand([
+    ({"canValid": False},),
+    ({"cruiseState.available": False},),
   ])
   def test_blocks_on_unavailable_car_state(self, kwargs):
     assert not self._update(make_CS(**kwargs))
 
-  @pytest.mark.parametrize("gear", [GearShifter.unknown, GearShifter.park, GearShifter.neutral, GearShifter.reverse])
+  @parameterized.expand([GearShifter.unknown, GearShifter.park, GearShifter.neutral, GearShifter.reverse])
   def test_blocks_in_non_driving_gears(self, gear):
     assert not self._update(make_CS(gearShifter=gear))
 
-  @pytest.mark.parametrize("gear", [GearShifter.drive, GearShifter.low])
+  @parameterized.expand([GearShifter.drive, GearShifter.low])
   def test_allows_in_driving_gears(self, gear):
     assert self._update(make_CS(gearShifter=gear))
 
   def test_calibration_threshold_is_any_progress(self):
-    # FrogPilot: liveCalibration (extrinsicsCalibration on master).calPerc >= 1, so it steers while still calibrating
+    # FrogPilot: calPerc >= 1, so it steers while still calibrating
     assert not self._update(cal_perc=0)
     assert self._update(cal_perc=1)
     assert self._update(cal_perc=100)
@@ -80,7 +80,7 @@ class TestAlwaysOnLateralGate:
   def test_default_pause_speed_never_pauses(self):
     assert self._update(make_CS(brakePressed=True, vEgo=0.1))
 
-  @pytest.mark.parametrize("event", IMMEDIATE_DISABLE_EVENTS)
+  @parameterized.expand(IMMEDIATE_DISABLE_EVENTS)
   def test_blocks_on_immediate_disable_events(self, event):
     self.events.add(event)
     assert not self._update()
@@ -91,12 +91,12 @@ class TestAlwaysOnLateralGate:
     self.events.add(EventName.speedTooLow)
     assert self._update()
 
-  @pytest.mark.parametrize("event", SOFT_DISABLE_EVENTS + USER_DISABLE_AND_NO_ENTRY_ONLY_EVENTS)
+  @parameterized.expand(SOFT_DISABLE_EVENTS + USER_DISABLE_AND_NO_ENTRY_ONLY_EVENTS)
   def test_survives_soft_disable_user_disable_and_no_entry_events(self, event):
     self.events.add(event)
     assert self._update()
 
-  @pytest.mark.parametrize("fault", ["steerFaultTemporary", "steerFaultPermanent"])
+  @parameterized.expand(["steerFaultTemporary", "steerFaultPermanent"])
   def test_steer_faults_are_not_gated_here(self, fault):
     # as in FrogPilot, latActive in controlsd drops on a steer fault and returns on the next clean frame
     assert self._update(make_CS(**{fault: True}))

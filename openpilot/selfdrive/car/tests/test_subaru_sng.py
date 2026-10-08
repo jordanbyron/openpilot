@@ -1,20 +1,18 @@
 import ast
 import pathlib
 
-import pytest
-
 from opendbc.car import gen_empty_fingerprint
 from opendbc.car.subaru.interface import CarInterface
 from opendbc.car.subaru.values import CAR, SubaruFlags, SubaruSafetyFlags
 from openpilot.common.basedir import BASEDIR
 from openpilot.common.params import Params
+from openpilot.common.test import OpenpilotTestCase
 
-CARD_PY = pathlib.Path(BASEDIR) / "selfdrive" / "car" / "card.py"
+CARD_PY = pathlib.Path(BASEDIR) / "openpilot" / "selfdrive" / "car" / "card.py"
 
 MIRRORED_CARD_INIT_GATE = "not self.CP.passive and self.CP.brand == 'subaru' and self.params.get_bool('SubaruSNG')"
 
 
-@pytest.fixture
 def params():
   p = Params()
   p.remove("SubaruSNG")
@@ -42,35 +40,32 @@ def card_init_gate_source():
   return tests[0]
 
 
-def test_default_off(params):
-  assert not params.get_bool("SubaruSNG")
+class TestSubaruSNGParam(OpenpilotTestCase):
+  def test_default_off(self, params):
+    assert not params.get_bool("SubaruSNG")
 
+  def test_local_gate_mirrors_card_py(self):
+    assert card_init_gate_source() == MIRRORED_CARD_INIT_GATE
 
-def test_local_gate_mirrors_card_py():
-  assert card_init_gate_source() == MIRRORED_CARD_INIT_GATE
+  def test_card_init_gate_is_noop_by_default(self, params):
+    CP = fresh_cp()
+    apply_card_init_gate(params, CP)
 
+    assert not CP.flags & SubaruFlags.SNG
+    assert not CP.safetyConfigs[0].safetyParam & SubaruSafetyFlags.SNG
 
-def test_card_init_gate_is_noop_by_default(params):
-  CP = fresh_cp()
-  apply_card_init_gate(params, CP)
+  def test_card_init_gate_applies_when_set(self, params):
+    params.put_bool("SubaruSNG", True, block=True)
+    CP = fresh_cp()
+    apply_card_init_gate(params, CP)
 
-  assert not CP.flags & SubaruFlags.SNG
-  assert not CP.safetyConfigs[0].safetyParam & SubaruSafetyFlags.SNG
+    assert CP.flags & SubaruFlags.SNG
+    assert CP.safetyConfigs[0].safetyParam & SubaruSafetyFlags.SNG
 
+  def test_card_init_gate_skips_passive_car(self, params):
+    params.put_bool("SubaruSNG", True, block=True)
+    CP = fresh_cp(passive=True)
+    apply_card_init_gate(params, CP)
 
-def test_card_init_gate_applies_when_set(params):
-  params.put_bool("SubaruSNG", True, block=True)
-  CP = fresh_cp()
-  apply_card_init_gate(params, CP)
-
-  assert CP.flags & SubaruFlags.SNG
-  assert CP.safetyConfigs[0].safetyParam & SubaruSafetyFlags.SNG
-
-
-def test_card_init_gate_skips_passive_car(params):
-  params.put_bool("SubaruSNG", True, block=True)
-  CP = fresh_cp(passive=True)
-  apply_card_init_gate(params, CP)
-
-  assert not CP.flags & SubaruFlags.SNG
-  assert not CP.safetyConfigs[0].safetyParam & SubaruSafetyFlags.SNG
+    assert not CP.flags & SubaruFlags.SNG
+    assert not CP.safetyConfigs[0].safetyParam & SubaruSafetyFlags.SNG

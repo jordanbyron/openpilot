@@ -14,6 +14,21 @@ share one set of visibility predicates and unit conversions in
 Changes span two repos: `opendbc_repo` (car interface + panda safety) and this one. Panda firmware
 picks up the safety headers from `opendbc_repo` automatically; `panda/` itself is untouched.
 
+### On master (`crosstrek-fp-parity-master`)
+
+This branch is the `crosstrek-fp-parity` work replayed onto openpilot `master` (3f06ed3b), with
+opendbc rebased onto opendbc `master` (35f7e081) as a single commit. Master moved most of the tree
+under `openpilot/`, so the paths below that start with `selfdrive/`, `common/` or `cereal/` now
+live under `openpilot/`. What changed in the port:
+
+- `SelfdriveState.alwaysOnLateral` is `@14`. Master took `@13` for `alertSound`.
+- master renamed the "live" services: AOL reads `extrinsicsCalibration.calPerc`.
+- opendbc master removed Subaru openpilot longitudinal (opendbc#3689), so SNG no longer checks for
+  it. The SNG TX list and param read sit inside `ALLOW_DEBUG` so the RELEASE MISRA pass stays clean.
+- master's new curvature safety check is not AOL-gated. No AOL car uses it.
+- The fork tests use master's `OpenpilotTestCase` and `parameterized` instead of pytest.
+- On the comma 4, master added descriptions to toggles, so the fork's four toggles have them too.
+
 ---
 
 ## 1. Impreza/Crosstrek increased steer torque
