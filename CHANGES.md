@@ -29,6 +29,26 @@ live under `openpilot/`. What changed in the port:
 - The fork tests use master's `OpenpilotTestCase` and `parameterized` instead of pytest.
 - On the comma 4, master added descriptions to toggles, so the fork's four toggles have them too.
 
+### Synced to master ff47f484 (2026-10-24, `xt-sync-master`)
+
+A merge commit brings in comma `master` ff47f484 (67 commits past 3f06ed3b). opendbc is pinned to
+`crosstrek-fp-parity-master-sync`: the single fork commit rebased onto opendbc b3bd79a6, the pin
+master now uses. Nothing in the fork's behavior changed; what the sync touched:
+
+- Both `toggles.py` conflicted: master removed Experimental mode (#39097), renamed the personality
+  row to "Following Distance" (#39100) and added "Initial Max Speed" (#39081). Master's version
+  wins, with the three fork toggles and the AOL pause row kept. AOL is still shown only on Subaru.
+- `SelfdriveState.alwaysOnLateral` stays `@14`. Master moved `experimentalMode @10` into the
+  deprecated group and took no new ordinal.
+- opendbc #3858/#3859 dropped `mass` and `steerRatioRear` from `CarParams`. The fork never set
+  either, so the Subaru interface and the integration test are unchanged.
+- #39091 makes modeld seed its previous desired curvature from `controlsState.curvature` whenever
+  `carControl.latActive` is false. AOL steering keeps `latActive` true, so it is unaffected while
+  steering; after an AOL pause (brake below the pause speed, non-driving gear, fault) the model's
+  path now restarts from the car's measured curvature instead of the stale commanded one.
+- #39127 removes the cruise planner delay when lowering the set speed and #39060 sets
+  `A_CRUISE_MIN` to -0.5; both are openpilot-longitudinal only, so stock-cruise Subarus see nothing.
+
 ---
 
 ## 1. Impreza/Crosstrek increased steer torque
@@ -236,10 +256,9 @@ openpilot:
 
 ```bash
 source .venv/bin/activate
-python -m pytest selfdrive/selfdrived/tests selfdrive/car/tests/test_always_on_lateral_param.py \
-                 selfdrive/car/tests/test_subaru_sng.py selfdrive/car/tests/test_subaru_feature_integration.py \
-                 common/tests/test_params.py selfdrive/ui/tests/test_translations.py -q
-ruff check . && ty check selfdrive/selfdrived selfdrive/controls selfdrive/car
+python tools/test_runner.py openpilot/selfdrive/selfdrived/tests openpilot/selfdrive/car/tests \
+                            openpilot/common/tests/test_params.py openpilot/selfdrive/ui/tests/test_translations.py
+ruff check . && ty check openpilot/selfdrive/selfdrived openpilot/selfdrive/controls openpilot/selfdrive/car
 ```
 
 `selfdrive/car/tests/test_subaru_feature_integration.py` is the cross-feature guard: all three
